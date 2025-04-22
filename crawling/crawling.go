@@ -26,16 +26,16 @@ func CrawlWebste(mainCtx context.Context, wg *sync.WaitGroup, chTopic <-chan str
 	defer wg.Done()
 
 	ctx := mainCtx
-	options := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("headless", false))
-	allocCtx, allocCancel := chromedp.NewExecAllocator(mainCtx, options...)
+	// options := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("headless", false))
+	// allocCtx, allocCancel := chromedp.NewExecAllocator(mainCtx, options...)
+	allocCtx, allocCancel := chromedp.NewExecAllocator(mainCtx)
 	defer allocCancel()
 	ctx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
 
-	for topic := range chTopic {
-		
-		// select {
-		// case url := <-chUrl:
+	for {
+		select {
+		case topic := <- chTopic:
 			fmt.Printf("Crawling topic: %s\n", topic)
 			newTopics, doc, err := getGetCrawlingResult(ctx, topic)
 			if err != nil {
@@ -49,10 +49,9 @@ func CrawlWebste(mainCtx context.Context, wg *sync.WaitGroup, chTopic <-chan str
 			}
 
 			chResult <- result
-
-		// default:
-			// fmt.Println("No URL to crawl")
-		// }
+		case <- mainCtx.Done():
+			return
+		}
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	// "fmt"
 	"sync"
-	// "time"
+	"flag"
 
 	// "log"
 
@@ -13,7 +13,11 @@ import (
 )
 
 func main() {
-	crawlerCount := 2
+	crawlerCount := flag.Int("crawlerCount", 2, "Number of crawlers")
+	startTopic := flag.String("startTopic", "대한민국", "Topic that a crawler visit")
+	numMaxTopic := flag.Int("numMaxTopic", 10, "Number of max topics")
+
+	flag.Parse()
 
 	notCrawledTopics := make(map[string]struct{})
 	crawlingTopics := make(map[string]struct{})
@@ -25,23 +29,17 @@ func main() {
 	// chNewTopic := make(chan []string)
 	// chDoc := make(chan string)
 
-	firstTopic := "대한민국"
-	notCrawledTopics[firstTopic] = struct{}{}
+	notCrawledTopics[*startTopic] = struct{}{}
 
 	// var mu sync.Mutex
 	var wg sync.WaitGroup
-	ctx := context.Background()
-	for i := 0; i < crawlerCount; i++ {
+	ctx, cancel := context.WithCancel(context.Background())
+	for i := 0; i < *crawlerCount; i++ {
 		wg.Add(1)
 		go crawling.CrawlWebste(ctx, &wg, chTopic, chCrawlingResult)
 	}
 
-	for (len(notCrawledTopics) > 0 || len(crawlingTopics) > 0) && len(crawledTopics) < 10 {
-		// if len(notCrawledTopics) == 0 {
-		// 	fmt.Println("All Topics crawled")
-		// 	break
-		// }
-
+	for (len(notCrawledTopics) > 0 || len(crawlingTopics) > 0) && len(crawledTopics) < *numMaxTopic {
 		var notCrawledTopic string
 		for notCrawledTopic = range notCrawledTopics {
 			break
@@ -56,25 +54,27 @@ func main() {
 			case crawlingResult := <-chCrawlingResult:
 				updateMaps(notCrawledTopics, crawlingTopics, crawledTopics, &crawlingResult)
 
-
-				// if len(notCrawledTopics) == 0 {
-				// 	break
-				// }
-
 			case chTopic <- notCrawledTopic:
 				delete(notCrawledTopics, notCrawledTopic)
 				crawlingTopics[notCrawledTopic] = struct{}{}
-				// fmt.Println(crawlingResult.NewTopic)
 			}
 		}
 	}
 
-	ctx.Done()
+	cancel()
+
+	// Drain the channel
+	go func() {
+		for range chCrawlingResult {
+			
+		}
+	}()
+
+	wg.Wait()
 
 	close(chTopic)
 	close(chCrawlingResult)
 
-	wg.Wait()
 }
 
 func updateMaps(notCrawledTopics, crawlingTopics, crawledTopics map[string]struct{}, crawlingResult *crawling.CrawlingResult) {
